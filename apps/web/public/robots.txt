@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /register
+Allow: /privacy
+Allow: /terms
+Allow: /contact
+Allow: /forgot-password
+
+Disallow: /dashboard/
+Disallow: /api/
+Disallow: /reset-password
+
+Sitemap: https://lnf.app/sitemap.xml
