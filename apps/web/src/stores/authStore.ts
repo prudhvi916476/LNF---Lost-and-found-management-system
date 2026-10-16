@@ -34,6 +34,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
 
+  devLogin: (user?: Partial<User>) => void;
   login: (email: string, password: string, recaptchaToken: string) => Promise<void>;
   register: (data: { email: string; password: string; fullName: string; phone?: string; recaptchaToken: string }) => Promise<void>;
   googleLogin: (accessToken: string) => Promise<void>;
@@ -52,6 +53,7 @@ function saveTokens(accessToken: string, refreshToken: string) {
 function clearTokens() {
   localStorage.removeItem('findit_access_token');
   localStorage.removeItem('findit_refresh_token');
+  localStorage.removeItem('findit_dev_user');
   // Also clear the legacy userId key if it exists
   localStorage.removeItem('findit_user_id');
 }
@@ -60,6 +62,22 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isLoading: true,
   isAuthenticated: false,
+
+  devLogin: (devUserData?: Partial<User>) => {
+    const devUser: User = {
+      id: 'dev-user-id',
+      email: devUserData?.email || 'dev@example.com',
+      fullName: devUserData?.fullName || 'Developer User',
+      role: 'user',
+      reputationPoints: 100,
+      isVerified: true,
+      ...devUserData,
+    };
+    localStorage.setItem('findit_access_token', 'dev-token');
+    localStorage.setItem('findit_refresh_token', 'dev-token');
+    localStorage.setItem('findit_dev_user', JSON.stringify(devUser));
+    set({ user: devUser, isAuthenticated: true, isLoading: false });
+  },
 
   login: async (email, password, recaptchaToken) => {
     const { data } = await authApi.login({ email, password, recaptchaToken });
@@ -81,27 +99,78 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user, isAuthenticated: true, isLoading: false });
   },
 
-  googleLogin: async (accessToken: string) => {
-    // Fetch user info from Google
-    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) throw new Error('Failed to fetch Google user info');
-    const userInfo = await res.json();
+  googleLogin: async (tokenOrCredential: string) => {
+    let email: string;
+    let fullName: string;
+    let googleId: string;
+    let avatarUrl: string | undefined;
 
-    const { data } = await authApi.googleAuth({
-      email: userInfo.email,
-      fullName: userInfo.name,
-      googleId: userInfo.sub,
-      avatarUrl: userInfo.picture,
-    });
+    // Check if input is a JWT ID token (Google One Tap / GoogleLogin button) or OAuth access token
+    const isJwt = tokenOrCredential.split('.').length === 3;
 
-    const tokens = data.data;
-    saveTokens(tokens.accessToken, tokens.refreshToken);
+    if (isJwt) {
+      try {
+        const decoded = jwtDecode<{
+          sub: string;
+          email: string;
+          name?: string;
+          picture?: string;
+        }>(tokenOrCredential);
+        email = decoded.email;
+        fullName = decoded.name || decoded.email.split('@')[0];
+        googleId = decoded.sub;
+        avatarUrl = decoded.picture;
+      } catch (decodeErr) {
+        throw new Error('Invalid Google credential token');
+      }
+    } else {
+      // It is an OAuth access token, fetch profile from Google userinfo API
+      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${tokenOrCredential}` },
+      });
+      if (!res.ok) {
+        throw new Error('Failed to retrieve Google user profile');
+      }
+      const userInfo = await res.json();
+      email = userInfo.email;
+      fullName = userInfo.name || userInfo.email.split('@')[0];
+      googleId = userInfo.sub;
+      avatarUrl = userInfo.picture;
+    }
 
-    const profile = await authApi.getProfile();
-    const user = profile.data.data;
-    set({ user, isAuthenticated: true, isLoading: false });
+    try {
+      const { data } = await authApi.googleAuth({
+        email,
+        fullName,
+        googleId,
+        avatarUrl,
+      });
+
+      const tokens = data.data;
+      saveTokens(tokens.accessToken, tokens.refreshToken);
+
+      const profile = await authApi.getProfile();
+      const user = profile.data.data;
+      set({ user, isAuthenticated: true, isLoading: false });
+    } catch (apiErr: any) {
+      // Fallback only for local development if the API server is offline
+      if (process.env.NODE_ENV !== 'production' && !apiErr.response && typeof window !== 'undefined') {
+        const fallbackUser: User = {
+          id: googleId || 'google-user-id',
+          email,
+          fullName,
+          avatarUrl,
+          role: 'user',
+          reputationPoints: 100,
+          isVerified: true,
+        };
+        saveTokens('dev-token', 'dev-token');
+        localStorage.setItem('findit_dev_user', JSON.stringify(fallbackUser));
+        set({ user: fallbackUser, isAuthenticated: true, isLoading: false });
+        return;
+      }
+      throw apiErr;
+    }
   },
 
   logout: async () => {
@@ -119,6 +188,31 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = localStorage.getItem('findit_access_token');
       if (!token) {
         set({ isLoading: false });
+        return;
+      }
+
+      // Check for development bypass session
+      if (token === 'dev-token') {
+        if (process.env.NODE_ENV === 'production') {
+          clearTokens();
+          set({ user: null, isAuthenticated: false, isLoading: false });
+          return;
+        }
+        let devUser: User = {
+          id: 'dev-user-id',
+          email: 'dev@example.com',
+          fullName: 'Developer User',
+          role: 'user',
+          reputationPoints: 100,
+          isVerified: true,
+        };
+        try {
+          const stored = localStorage.getItem('findit_dev_user');
+          if (stored) devUser = JSON.parse(stored);
+        } catch {
+          // ignore parsing error
+        }
+        set({ user: devUser, isAuthenticated: true, isLoading: false });
         return;
       }
 

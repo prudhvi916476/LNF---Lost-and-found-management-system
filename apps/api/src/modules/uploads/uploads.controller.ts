@@ -52,8 +52,8 @@ export class UploadsController {
     ) file: Express.Multer.File
   ) {
     if (!file) throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);
-    const url = await this.uploadsService.uploadFile(file);
-    return { success: true, data: { url } };
+    const result = await this.uploadsService.uploadFile(file);
+    return { success: true, data: result };
   }
 
   /**
@@ -100,9 +100,7 @@ export class UploadsController {
   }
 
   @Get(':filename')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get an uploaded file (authenticated)' })
+  @ApiOperation({ summary: 'Get an uploaded file (public)' })
   getFile(@Param('filename') filename: string, @Res() res: Response) {
     const safeName = sanitizeFilename(filename);
     const uploadRoot = path.resolve(process.cwd(), 'uploads');

@@ -56,11 +56,11 @@ export default function SearchPage() {
     return url;
   };
 
-  /** For found items, prefer the anonymised preview; for lost items use the original */
+  /** Prefer the anonymised preview when available */
   const getDisplayImageUrl = (item: any) => {
     const img = item.images?.[0];
     if (!img) return '';
-    if (item.itemType === 'found' && img.previewUrl) {
+    if (img.previewUrl) {
       return getValidImageUrl(img.previewUrl);
     }
     return getValidImageUrl(img.url);
@@ -189,9 +189,9 @@ export default function SearchPage() {
                   <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-sm ${item.itemType === 'lost' ? 'bg-danger-500 text-white' : 'bg-accent-500 text-white'}`}>
                     {item.itemType === 'lost' ? 'LOST' : 'FOUND'}
                   </span>
-                  {item.itemType === 'found' && item.images?.[0]?.previewUrl && (
+                  {item.images?.[0]?.previewUrl && (
                     <span className="absolute top-3 right-3 bg-amber-500/90 text-white text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-sm">
-                      <ShieldCheck className="w-2.5 h-2.5" /> Protected
+                      <ShieldCheck className="w-2.5 h-2.5" /> Negative
                     </span>
                   )}
                   {item.status === 'matched' && (

@@ -39,7 +39,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https: http:",
-      "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') + " https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com wss: ws:",
+      "connect-src 'self' " + (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001') + " https://www.googleapis.com https://oauth2.googleapis.com https://accounts.google.com https://maps.googleapis.com https://*.googleapis.com https://nominatim.openstreetmap.org wss: ws:",
       "frame-src 'self' https://www.google.com https://accounts.google.com",
       "object-src 'none'",
       "base-uri 'self'",

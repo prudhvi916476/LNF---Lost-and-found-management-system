@@ -9,6 +9,8 @@ import {
   Eye, EyeOff, Image as ImageIcon,
 } from 'lucide-react';
 import { itemsApi, uploadApi } from '@/lib/api';
+import { toast } from 'sonner';
+import { geocodeAddress, reverseGeocode } from '@/lib/geocoding';
 
 const Map = dynamic(() => import('@/components/ui/map'), {
   ssr: false,
@@ -52,26 +54,33 @@ export default function ReportFoundPage() {
 
   const handleMapClick = async (lat: number, lng: number) => {
     setMapPosition([lat, lng]);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await res.json();
-      if (data?.address) {
-        const city = data.address.city || data.address.town || data.address.village || '';
-        setFormData(prev => ({ ...prev, locationAddress: data.display_name || '', city }));
-      }
-    } catch (e) { console.error(e); }
+    setCoords({ lat, lng });
+    const geo = await reverseGeocode(lat, lng);
+    if (geo) {
+      setFormData(prev => ({ ...prev, locationAddress: geo.address, city: geo.city || prev.city }));
+    }
   };
 
   const handleAddressSearch = async () => {
     if (!formData.locationAddress) return;
     setIsLocating(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.locationAddress)}`);
-      const data = await res.json();
-      if (data?.length > 0) {
-        setMapPosition([parseFloat(data[0].lat), parseFloat(data[0].lon)]);
+      const geo = await geocodeAddress(formData.locationAddress);
+      if (geo) {
+        setMapPosition([geo.lat, geo.lng]);
+        setCoords({ lat: geo.lat, lng: geo.lng });
+        if (geo.city) {
+          setFormData(prev => ({ ...prev, city: geo.city }));
+        }
+        toast.success('Location found on map');
+      } else {
+        toast.error('Location not found. Try searching by city or landmark.');
       }
-    } catch (e) { console.error(e); } finally { setIsLocating(false); }
+    } catch {
+      toast.error('Location search failed. Please pin directly on map.');
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const handleCurrentLocation = () => {
@@ -80,20 +89,28 @@ export default function ReportFoundPage() {
       navigator.geolocation.getCurrentPosition(
         async ({ coords: { latitude, longitude } }) => {
           try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-            const data = await res.json();
-            if (data?.address) {
-              const city = data.address.city || data.address.town || data.address.village || '';
-              setFormData(prev => ({ ...prev, locationAddress: data.display_name || '', city }));
-              setCoords({ lat: latitude, lng: longitude });
-              setMapPosition([latitude, longitude]);
+            setCoords({ lat: latitude, lng: longitude });
+            setMapPosition([latitude, longitude]);
+            const geo = await reverseGeocode(latitude, longitude);
+            if (geo) {
+              setFormData(prev => ({ ...prev, locationAddress: geo.address, city: geo.city || prev.city }));
+              toast.success('Current location detected');
             }
-          } catch (e) { console.error(e); } finally { setIsLocating(false); }
+          } catch {
+            // Location obtained even if address reverse geocode fails
+          } finally {
+            setIsLocating(false);
+          }
         },
-        () => { alert('Could not get location. Check browser permissions.'); setIsLocating(false); }
+        (err) => {
+          toast.error('Could not get location: ' + err.message);
+          setIsLocating(false);
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     } else {
-      alert('Geolocation not supported'); setIsLocating(false);
+      toast.error('Geolocation not supported by your browser');
+      setIsLocating(false);
     }
   };
 
@@ -156,9 +173,10 @@ export default function ReportFoundPage() {
       if (mapPosition) { payload.locationLat = mapPosition[0]; payload.locationLng = mapPosition[1]; }
       else if (coords.lat && coords.lng) { payload.locationLat = coords.lat; payload.locationLng = coords.lng; }
 
-      // Send preview URLs for public display (originals are stored server-side)
+      // Send images with both original URL and negative preview URL
       if (images.length > 0) {
-        payload.imageUrls = images.map(img => img.previewUrl);
+        payload.imageUrls = images.map(img => img.originalUrl || img.previewUrl);
+        payload.images = images.map(img => ({ url: img.originalUrl, previewUrl: img.previewUrl }));
       }
       if (customQuestions.length > 0) payload.customQuestions = customQuestions;
 
@@ -345,17 +363,18 @@ export default function ReportFoundPage() {
                   {images.map((img, i) => (
                     <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/[0.12] group">
                       <img
-                        src={img.localPreview}
+                        src={img.previewUrl || img.localPreview}
                         alt={`Upload ${i + 1}`}
                         className="w-full h-full object-cover"
                       />
                       {/* Preview overlay */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                        <p className="text-white text-xs font-medium">Public preview:</p>
-                        <p className="text-white/70 text-xs">Grayscale negative</p>
+                        <p className="text-white text-xs font-semibold">Anonymised Negative</p>
+                        <p className="text-amber-300 text-[11px]">Public preview active</p>
                       </div>
-                      <div className="absolute top-1 left-1 bg-amber-500 rounded-md px-1.5 py-0.5">
-                        <p className="text-white text-[9px] font-bold">PROTECTED</p>
+                      <div className="absolute top-2 left-2 bg-amber-500/90 backdrop-blur-md rounded-md px-2 py-0.5 flex items-center gap-1 shadow">
+                        <ShieldCheck className="w-3 h-3 text-white" />
+                        <p className="text-white text-[10px] font-bold tracking-wide">NEGATIVE PREVIEW</p>
                       </div>
                       <button
                         onClick={() => removeImage(i)}

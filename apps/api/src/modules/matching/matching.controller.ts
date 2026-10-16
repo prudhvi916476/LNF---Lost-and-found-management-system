@@ -37,4 +37,18 @@ export class MatchingController {
     const matches = await this.matchingService.findMatchesForLostItem(lostItemId);
     return { success: true, data: matches, message: `Found ${matches.length} matches` };
   }
+
+  @Post('scan')
+  @ApiOperation({ summary: 'Run comprehensive AI matching scan for user' })
+  async runScan(@Req() req: any) {
+    const result = await this.matchingService.runScanForUser(req.user.sub);
+    return { success: true, data: result.matches, meta: { total: result.total }, message: `Scan completed` };
+  }
+
+  @Post('demo')
+  @ApiOperation({ summary: 'Generate a realistic demo match for testing AI engine' })
+  async createDemo(@Req() req: any) {
+    const match = await this.matchingService.createDemoMatchForUser(req.user.sub);
+    return { success: true, data: match, message: 'Sample AI match generated successfully' };
+  }
 }

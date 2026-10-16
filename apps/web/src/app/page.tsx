@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/material-design-3-button';
 import { useAuthStore } from '@/stores/authStore';
 import { itemsApi, searchApi, matchApi, notificationsApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { GoogleButton } from '@/components/ui/google-button';
 
 // ─── Animation Variants ──────────────────────────────
 const containerVariants = {
@@ -223,11 +224,12 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-3">
-              <Link href="/login" className="px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <GoogleButton variant="navbar" text="Continue with Google" redirect="/dashboard" />
+              <Link href="/login" className="px-3 sm:px-4 py-2 text-sm font-medium text-white/70 hover:text-white transition-colors">
                 Sign In
               </Link>
-              <Link href="/register" className="px-5 py-2 text-sm font-semibold bg-white text-surface-900 rounded-xl hover:bg-white/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
+              <Link href="/register" className="hidden sm:inline-flex px-5 py-2 text-sm font-semibold bg-white text-surface-900 rounded-xl hover:bg-white/90 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
                 Get Started
               </Link>
             </div>
@@ -277,14 +279,25 @@ export default function Home() {
                 </div>
               </motion.div>
 
-              {/* Quick Action Buttons */}
-              <motion.div variants={itemVariants} className="flex flex-wrap justify-center gap-4">
-                <Link href={isAuthenticated ? "/dashboard/lost/new" : "/login?redirect=/dashboard/lost/new"} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] transition-all font-medium backdrop-blur-sm">
-                  <FileWarning className="w-5 h-5 text-danger-400" /> Report Lost Item
-                </Link>
-                <Link href={isAuthenticated ? "/dashboard/found/new" : "/login?redirect=/dashboard/found/new"} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] transition-all font-medium backdrop-blur-sm">
-                  <PackageCheck className="w-5 h-5 text-accent-400" /> I Found Something
-                </Link>
+              {/* Quick Action & Google Sign-In Buttons */}
+              <motion.div variants={itemVariants} className="flex flex-col items-center gap-4">
+                <div className="flex flex-wrap items-center justify-center gap-4">
+                  <GoogleButton
+                    variant="hero"
+                    text="Continue with Google"
+                    redirect="/dashboard"
+                  />
+                  <Link href={isAuthenticated ? "/dashboard/lost/new" : "/login?redirect=/dashboard/lost/new"} className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] transition-all font-medium backdrop-blur-sm hover:-translate-y-0.5">
+                    <FileWarning className="w-5 h-5 text-danger-400" /> Report Lost Item
+                  </Link>
+                  <Link href={isAuthenticated ? "/dashboard/found/new" : "/login?redirect=/dashboard/found/new"} className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white/[0.06] border border-white/[0.1] hover:bg-white/[0.1] transition-all font-medium backdrop-blur-sm hover:-translate-y-0.5">
+                    <PackageCheck className="w-5 h-5 text-accent-400" /> I Found Something
+                  </Link>
+                </div>
+                <p className="text-xs text-white/40 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Instant Google sign-in &bull; No password required &bull; 100% secure
+                </p>
               </motion.div>
             </motion.div>
           </div>

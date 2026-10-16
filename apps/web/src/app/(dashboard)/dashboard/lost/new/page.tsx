@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
   ArrowLeft, ArrowRight, Upload, MapPin, Calendar, Phone,
-  DollarSign, CheckCircle2, Loader2, Camera, X, Package
+  DollarSign, CheckCircle2, Loader2, Camera, X, Package, ShieldCheck
 } from 'lucide-react';
 import { itemsApi, uploadApi } from '@/lib/api';
+import { toast } from 'sonner';
+import { geocodeAddress, reverseGeocode } from '@/lib/geocoding';
 
 const CATEGORIES = [
   'Electronics', 'Phone', 'Laptop', 'Tablet', 'Wallet', 'Keys', 'Bag', 'Backpack',
@@ -35,22 +37,19 @@ export default function ReportLostPage() {
     city: '', state: '', country: '', lostDate: '', lostTimeApprox: '',
     contactPreference: 'in_app', rewardAmount: '',
   });
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<Array<{ url: string; previewUrl: string; name?: string }>>([]);
   const [isLocating, setIsLocating] = useState(false);
   const [mapPosition, setMapPosition] = useState<[number, number] | undefined>(undefined);
 
   const handleMapClick = async (lat: number, lng: number) => {
     setMapPosition([lat, lng]);
-    try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-      const data = await res.json();
-      if (data && data.address) {
-        const city = data.address.city || data.address.town || data.address.village || '';
-        const address = data.display_name || '';
-        setFormData(prev => ({ ...prev, locationAddress: address, city: city }));
-      }
-    } catch (e) {
-      console.error(e);
+    const geo = await reverseGeocode(lat, lng);
+    if (geo) {
+      setFormData(prev => ({
+        ...prev,
+        locationAddress: geo.address,
+        city: geo.city || prev.city
+      }));
     }
   };
 
@@ -58,15 +57,18 @@ export default function ReportLostPage() {
     if (!formData.locationAddress) return;
     setIsLocating(true);
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formData.locationAddress)}`);
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
-        setMapPosition([lat, lng]);
+      const geo = await geocodeAddress(formData.locationAddress);
+      if (geo) {
+        setMapPosition([geo.lat, geo.lng]);
+        if (geo.city) {
+          setFormData(prev => ({ ...prev, city: geo.city }));
+        }
+        toast.success('Location found on map');
+      } else {
+        toast.error('Location not found. Try searching by city or landmark.');
       }
-    } catch (e) {
-      console.error('Failed to geocode address', e);
+    } catch {
+      toast.error('Location search failed. Please pin directly on map.');
     } finally {
       setIsLocating(false);
     }
@@ -79,35 +81,31 @@ export default function ReportLostPage() {
         async (position) => {
           try {
             const { latitude, longitude } = position.coords;
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
-            const data = await res.json();
-            
-            if (data && data.address) {
-              const city = data.address.city || data.address.town || data.address.village || '';
-              const address = data.display_name || '';
-              
+            setMapPosition([latitude, longitude]);
+            const geo = await reverseGeocode(latitude, longitude);
+            if (geo) {
               setFormData(prev => ({
                 ...prev,
-                locationAddress: address,
-                city: city
+                locationAddress: geo.address,
+                city: geo.city || prev.city
               }));
-              setMapPosition([latitude, longitude]);
+              toast.success('Current location detected');
             }
-          } catch (error) {
-            console.error('Error fetching address:', error);
+          } catch {
+            // Geolocation succeeded even if reverse lookup was unavailable
           } finally {
             setIsLocating(false);
           }
         },
         (error) => {
-          console.error('Error getting location:', error);
+          toast.error('Could not get your location: ' + error.message);
           setIsLocating(false);
-          alert('Could not get your location. Please check your browser permissions.');
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     } else {
-      alert('Geolocation is not supported by your browser');
       setIsLocating(false);
+      toast.error('Geolocation is not supported by your browser');
     }
   };
 
@@ -117,8 +115,13 @@ export default function ReportLostPage() {
       for (const file of files) {
         try {
           const res = await uploadApi.uploadFile(file);
-          if (res.data?.data?.url) {
-            setImages(prev => [...prev, res.data.data.url]);
+          if (res.data?.data) {
+            const { url, previewUrl } = res.data.data;
+            setImages(prev => [...prev, {
+              url,
+              previewUrl: previewUrl || url,
+              name: file.name
+            }]);
           }
         } catch (err) {
           console.error("Failed to upload file", err);
@@ -165,7 +168,8 @@ export default function ReportLostPage() {
       }
       
       if (images.length > 0) {
-        payload.imageUrls = images;
+        payload.imageUrls = images.map(img => img.url);
+        payload.images = images.map(img => ({ url: img.url, previewUrl: img.previewUrl }));
       }
       
       if (formData.rewardAmount) {
@@ -298,9 +302,13 @@ export default function ReportLostPage() {
             {images.length > 0 && (
               <div className="grid grid-cols-3 gap-3">
                 {images.map((img, i) => (
-                  <div key={i} className="relative aspect-square rounded-xl bg-white/[0.04] border border-white/[0.12] flex items-center justify-center overflow-hidden">
+                  <div key={i} className="relative aspect-square rounded-xl bg-white/[0.04] border border-white/[0.12] flex items-center justify-center overflow-hidden group">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt="preview" className="w-full h-full object-cover" />
+                    <img src={img.previewUrl || img.url} alt="preview" className="w-full h-full object-cover" />
+                    <div className="absolute top-2 left-2 bg-amber-500/90 backdrop-blur-md rounded-md px-2 py-0.5 flex items-center gap-1 shadow">
+                      <ShieldCheck className="w-3 h-3 text-white" />
+                      <p className="text-white text-[10px] font-bold tracking-wide">NEGATIVE PREVIEW</p>
+                    </div>
                     <button onClick={(e) => { e.preventDefault(); setImages(images.filter((_, idx) => idx !== i)); }} className="absolute top-2 right-2 p-1 rounded-full bg-surface-900/50 text-white hover:bg-surface-900/70 transition-colors z-10">
                       <X className="w-3 h-3" />
                     </button>

@@ -158,8 +158,16 @@ export default function FoundItemDetailPage() {
     );
   }
 
+  const getValidImageUrl = (url?: string) => {
+    if (!url) return '';
+    if (url.includes('/uploads/') && !url.includes('/api/uploads/')) {
+      return url.replace('/uploads/', '/api/uploads/');
+    }
+    return url;
+  };
+
   const primaryImage = item.images?.[0];
-  const displayImageUrl = primaryImage?.previewUrl || primaryImage?.url;
+  const displayImageUrl = getValidImageUrl(primaryImage?.previewUrl || primaryImage?.url);
 
   return (
     <div className="max-w-4xl mx-auto animate-fade-in space-y-6">
@@ -187,7 +195,16 @@ export default function FoundItemDetailPage() {
                 src={displayImageUrl}
                 alt={item.itemName}
                 className="w-full object-cover aspect-video"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fallback = e.currentTarget.parentElement?.querySelector('.fallback-placeholder');
+                  if (fallback) fallback.classList.remove('hidden');
+                }}
               />
+              <div className="hidden fallback-placeholder absolute inset-0 bg-white/[0.02] flex flex-col items-center justify-center text-white/40">
+                <EyeOff className="w-8 h-8 mb-2" />
+                <p className="text-xs">Image unavailable</p>
+              </div>
               {primaryImage?.isPrivate && (
                 <div className="absolute inset-0 bg-black/20 flex flex-col items-center justify-center">
                   <div className="bg-black/70 text-white text-xs px-4 py-2 rounded-xl flex items-center gap-2">

@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
+import * as path from 'path';
+import * as fs from 'fs';
+import sharp from 'sharp';
 import { LostItem, FoundItem, ItemImage, Match, Claim, CustomVerificationQuestion } from '../../database/entities/all-entities';
+import { MatchingService } from '../matching/matching.service';
 
 @Injectable()
 export class ItemsService {
@@ -15,12 +19,13 @@ export class ItemsService {
     @InjectRepository(CustomVerificationQuestion)
     private readonly customQuestionRepo: Repository<CustomVerificationQuestion>,
     private readonly dataSource: DataSource,
+    private readonly matchingService: MatchingService,
   ) {}
 
   // ─── Lost Items ─────────────────────────────────────────
 
   async createLostItem(userId: string, data: any): Promise<LostItem> {
-    const { imageUrls, ...itemData } = data;
+    const { imageUrls, images, ...itemData } = data;
     const item = this.lostItemRepo.create({
       ...itemData,
       userId,
@@ -28,8 +33,16 @@ export class ItemsService {
     });
     const savedItem = await this.lostItemRepo.save(item as any) as LostItem;
 
-    if (imageUrls && imageUrls.length > 0) {
-      await this.addItemImages(savedItem.id, 'lost', imageUrls);
+    const toAdd = images || imageUrls;
+    if (toAdd && toAdd.length > 0) {
+      await this.addItemImages(savedItem.id, 'lost', toAdd);
+    }
+
+    // Automatically trigger AI matching
+    try {
+      await this.matchingService.findMatchesForLostItem(savedItem.id);
+    } catch (e) {
+      // non-blocking
     }
 
     return this.getLostItemById(savedItem.id);
@@ -110,7 +123,7 @@ export class ItemsService {
   // ─── Found Items ────────────────────────────────────────
 
   async createFoundItem(userId: string, data: any): Promise<FoundItem> {
-    const { imageUrls, customQuestions, ...itemData } = data;
+    const { imageUrls, images, customQuestions, ...itemData } = data;
     const item = this.foundItemRepo.create({
       ...itemData,
       userId,
@@ -118,8 +131,9 @@ export class ItemsService {
     });
     const savedItem = await this.foundItemRepo.save(item as any) as FoundItem;
 
-    if (imageUrls && imageUrls.length > 0) {
-      await this.addItemImages(savedItem.id, 'found', imageUrls);
+    const toAdd = images || imageUrls;
+    if (toAdd && toAdd.length > 0) {
+      await this.addItemImages(savedItem.id, 'found', toAdd);
     }
 
     // Save custom verification questions (0-5) set by the finder
@@ -133,6 +147,13 @@ export class ItemsService {
         }),
       );
       await this.customQuestionRepo.save(questions);
+    }
+
+    // Automatically trigger AI matching against active lost items
+    try {
+      await this.matchingService.findMatchesForFoundItem(savedItem.id);
+    } catch (e) {
+      // non-blocking
     }
 
     return this.getFoundItemById(savedItem.id);
@@ -202,13 +223,54 @@ export class ItemsService {
   async addItemImages(
     itemId: string,
     itemType: 'lost' | 'found',
-    imageUrls: string[],
+    imageUrls: (string | { url: string; previewUrl?: string })[],
   ): Promise<ItemImage[]> {
-    const images = imageUrls.map((url, index) =>
-      this.imageRepo.create({
-        url,
-        sortOrder: index,
-        ...(itemType === 'lost' ? { lostItemId: itemId } : { foundItemId: itemId }),
+    const endpoint = process.env.API_URL || 'http://localhost:3001';
+    const images = await Promise.all(
+      imageUrls.map(async (entry, index) => {
+        let url = typeof entry === 'string' ? entry : entry.url;
+        let previewUrl = typeof entry === 'object' ? entry.previewUrl : undefined;
+
+        if (url && url.includes('/previews/')) {
+          if (!previewUrl) previewUrl = url;
+        }
+
+        if (!previewUrl && url) {
+          const filename = url.split('/').pop();
+          if (filename) {
+            const previewFilename = filename.replace(/\.[^.]+$/, '_preview.jpg');
+            const previewPath = path.resolve(process.cwd(), 'uploads', 'previews', previewFilename);
+            const originalPath = path.resolve(process.cwd(), 'uploads', filename);
+
+            if (fs.existsSync(previewPath)) {
+              previewUrl = `${endpoint}/api/uploads/previews/${previewFilename}`;
+            } else if (fs.existsSync(originalPath)) {
+              try {
+                await (sharp as any)(originalPath)
+                  .resize({ width: 1200, withoutEnlargement: true })
+                  .flatten({ background: '#ffffff' })
+                  .grayscale()
+                  .negate({ alpha: false })
+                  .jpeg({ quality: 85 })
+                  .toFile(previewPath);
+                previewUrl = `${endpoint}/api/uploads/previews/${previewFilename}`;
+              } catch (e) {
+                previewUrl = url;
+              }
+            } else {
+              previewUrl = url;
+            }
+          }
+        }
+
+        const negativeUrl = previewUrl || url;
+        return this.imageRepo.create({
+          url: negativeUrl, // Public display is always the negative image
+          previewUrl: negativeUrl,
+          isPrivate: true,
+          sortOrder: index,
+          ...(itemType === 'lost' ? { lostItemId: itemId } : { foundItemId: itemId }),
+        });
       }),
     );
     return this.imageRepo.save(images);

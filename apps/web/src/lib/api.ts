@@ -27,14 +27,18 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Don't retry auth endpoints to prevent loops
+      if (originalRequest.url?.includes('/auth/login') || originalRequest.url?.includes('/auth/refresh')) {
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
 
       try {
         const refreshToken = localStorage.getItem('findit_refresh_token');
         const accessToken = localStorage.getItem('findit_access_token');
 
-        if (refreshToken && accessToken) {
-          // Decode the access token to get the userId — avoids storing it separately
+        if (refreshToken && accessToken && accessToken !== 'dev-token') {
           let userId: string | null = null;
           try {
             const decoded = jwtDecode<{ sub: string }>(accessToken);
@@ -57,11 +61,18 @@ api.interceptors.response.use(
           }
         }
       } catch {
+        // Refresh failed, clean up tokens below
+      }
+
+      // If refresh failed or was invalid, clean up local storage and redirect
+      if (typeof window !== 'undefined') {
         localStorage.removeItem('findit_access_token');
         localStorage.removeItem('findit_refresh_token');
-        localStorage.removeItem('findit_user_id'); // clean up legacy key
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+        localStorage.removeItem('findit_dev_user');
+        localStorage.removeItem('findit_user_id');
+
+        if (!window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
+          window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
         }
       }
     }
@@ -115,6 +126,8 @@ export const matchApi = {
   confirmMatch: (id: string) => api.post(`/matches/${id}/confirm`),
   dismissMatch: (id: string) => api.post(`/matches/${id}/dismiss`),
   runMatching: (lostItemId: string) => api.post(`/matches/run/${lostItemId}`),
+  runScan: () => api.post('/matches/scan'),
+  createDemoMatch: () => api.post('/matches/demo'),
 };
 
 // ─── Claims API ───────────────────────────────────

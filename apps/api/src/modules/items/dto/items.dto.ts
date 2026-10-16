@@ -108,6 +108,11 @@ export class CreateLostItemDto {
   @IsOptional()
   @IsArray()
   imageUrls?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  images?: any[];
 }
 
 export class UpdateLostItemDto extends PartialType(CreateLostItemDto) {
@@ -191,6 +196,11 @@ export class CreateFoundItemDto {
   @IsOptional()
   @IsArray()
   imageUrls?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsArray()
+  images?: any[];
 
   /**
    * Optional custom verification questions (0–5).

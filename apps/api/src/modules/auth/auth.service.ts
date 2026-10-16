@@ -124,10 +124,26 @@ export class AuthService {
         role: 'user',
       });
       user = await this.userRepository.save(user);
-    } else if (!user.googleId) {
-      user.googleId = googleUser.googleId;
-      if (googleUser.avatarUrl) user.avatarUrl = googleUser.avatarUrl;
-      user = await this.userRepository.save(user);
+    } else {
+      if (!user.isActive) {
+        throw new UnauthorizedException('Account is deactivated');
+      }
+      let modified = false;
+      if (!user.googleId) {
+        user.googleId = googleUser.googleId;
+        modified = true;
+      }
+      if (googleUser.avatarUrl && !user.avatarUrl) {
+        user.avatarUrl = googleUser.avatarUrl;
+        modified = true;
+      }
+      if (!user.isVerified) {
+        user.isVerified = true;
+        modified = true;
+      }
+      if (modified) {
+        user = await this.userRepository.save(user);
+      }
     }
 
     const tokens = await this.generateTokens(user);

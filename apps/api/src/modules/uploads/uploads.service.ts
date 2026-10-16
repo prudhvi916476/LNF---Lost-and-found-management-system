@@ -33,14 +33,43 @@ export class UploadsService {
     return { url, key };
   }
 
-  async uploadFile(file: Express.Multer.File): Promise<string> {
-    const filename = `${uuid()}_${file.originalname}`;
+  async uploadFile(file: Express.Multer.File): Promise<{
+    url: string;
+    previewUrl: string;
+    originalUrl: string;
+    filename: string;
+    previewFilename: string;
+  }> {
+    const id = uuid();
+    const ext = path.extname(file.originalname) || '.jpg';
+    const filename = `${id}_${file.originalname}`;
+    const previewFilename = `${id}_preview.jpg`;
     const filePath = path.join(this.uploadDir, filename);
+    const previewPath = path.join(this.previewDir, previewFilename);
 
+    // Save original
     fs.writeFileSync(filePath, file.buffer);
 
+    // Build processed preview: flatten alpha → grayscale → invert (negative)
+    try {
+      await (sharp as any)(file.buffer)
+        .resize({ width: 1200, withoutEnlargement: true })
+        .flatten({ background: '#ffffff' })
+        .grayscale()
+        .negate({ alpha: false })
+        .jpeg({ quality: 85 })
+        .toFile(previewPath);
+    } catch (err) {
+      this.logger.error('Failed to generate negative preview in uploadFile', err);
+    }
+
     const endpoint = this.configService.get('API_URL', 'http://localhost:3001');
-    return `${endpoint}/api/uploads/${filename}`;
+    const url = `${endpoint}/api/uploads/${filename}`;
+    const previewUrl = fs.existsSync(previewPath)
+      ? `${endpoint}/api/uploads/previews/${previewFilename}`
+      : url;
+
+    return { url, previewUrl, originalUrl: url, filename, previewFilename };
   }
 
   /**
@@ -56,6 +85,7 @@ export class UploadsService {
   async uploadFoundItemImage(file: Express.Multer.File): Promise<{
     originalUrl: string;
     previewUrl: string;
+    url: string;
     originalFilename: string;
     previewFilename: string;
   }> {
@@ -70,21 +100,20 @@ export class UploadsService {
     // Save original as-is
     fs.writeFileSync(originalPath, file.buffer);
 
-    // Build processed preview: grayscale → negate → moderate blur → contrast boost
+    // Build processed preview: flatten alpha → grayscale → invert (negative)
     await (sharp as any)(file.buffer)
       .resize({ width: 1200, withoutEnlargement: true })
+      .flatten({ background: '#ffffff' })
       .grayscale()
-      .negate()                            // invert to negative
-      .linear(1.4, -30)                    // increase contrast (a * pixel + b)
-      .blur(2.0)                           // mild Gaussian blur to obscure fine details
-      .jpeg({ quality: 80 })
+      .negate({ alpha: false })
+      .jpeg({ quality: 85 })
       .toFile(previewPath);
 
     const endpoint = this.configService.get('API_URL', 'http://localhost:3001');
     const originalUrl = `${endpoint}/api/uploads/${originalFilename}`;
     const previewUrl = `${endpoint}/api/uploads/previews/${previewFilename}`;
 
-    return { originalUrl, previewUrl, originalFilename, previewFilename };
+    return { originalUrl, previewUrl, url: originalUrl, originalFilename, previewFilename };
   }
 
   async deleteFile(key: string): Promise<void> {

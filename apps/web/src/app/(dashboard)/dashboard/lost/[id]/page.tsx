@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { itemsApi } from '@/lib/api';
-import { ArrowLeft, MapPin, Clock, Tag, Loader2, Calendar, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Tag, Loader2, Calendar, AlertCircle, Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function LostItemDetailsPage() {
   const params = useParams();
@@ -82,16 +82,27 @@ export default function LostItemDetailsPage() {
           {/* Left Column: Image */}
           <div className="bg-white/[0.02] relative min-h-[300px] md:min-h-full flex items-center justify-center border-b md:border-b-0 md:border-r border-white/[0.12]">
             {item.images && item.images.length > 0 ? (
-              <img 
-                src={getValidImageUrl(item.images[0].url)} 
-                alt={item.itemName} 
-                className="absolute inset-0 w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
-                  if (fallback) fallback.classList.remove('hidden');
-                }}
-              />
+              <>
+                <img 
+                  src={getValidImageUrl(item.images[0].previewUrl || item.images[0].url)} 
+                  alt={item.itemName} 
+                  className="absolute inset-0 w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
+                    if (fallback) fallback.classList.remove('hidden');
+                  }}
+                />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between bg-black/70 backdrop-blur-md px-3 py-2 rounded-xl border border-white/[0.1]">
+                  <div className="flex items-center gap-2 text-xs text-amber-300">
+                    <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="font-semibold tracking-wide">Anonymised Negative Image</span>
+                  </div>
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+                    PROTECTED
+                  </span>
+                </div>
+              </>
             ) : null}
             <Tag className={`w-16 h-16 text-white/40 ${item.images && item.images.length > 0 ? 'hidden fallback-icon absolute' : ''}`} />
             
@@ -161,12 +172,19 @@ export default function LostItemDetailsPage() {
               </div>
             </div>
 
-            <div className="pt-6 flex items-center gap-3">
+            <div className="pt-6 flex flex-col sm:flex-row items-center gap-3">
+              <button 
+                onClick={() => router.push('/dashboard/matches')}
+                className="w-full sm:flex-1 py-3 rounded-xl bg-primary-500 text-white font-semibold hover:bg-primary-600 transition-all text-center flex items-center justify-center gap-2 shadow-glow"
+              >
+                <Sparkles className="w-4 h-4" />
+                View AI Matches
+              </button>
               <button 
                 onClick={() => router.push('/dashboard/search')}
-                className="flex-1 py-3 rounded-xl bg-primary-500/10 text-primary-400 font-semibold hover:bg-primary-500/20 transition-all text-center"
+                className="w-full sm:flex-1 py-3 rounded-xl bg-white/[0.04] text-white/80 font-medium hover:bg-white/[0.08] transition-all text-center border border-white/[0.08]"
               >
-                Search Matches
+                Search Listings
               </button>
             </div>
           </div>

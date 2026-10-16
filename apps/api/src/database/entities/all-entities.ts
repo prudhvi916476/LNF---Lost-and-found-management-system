@@ -78,7 +78,7 @@ export class LostItem {
   @Column({ nullable: true })
   country: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lostDate: Date;
 
   @Column({ nullable: true })
@@ -158,7 +158,7 @@ export class FoundItem {
   @Column({ nullable: true })
   country: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   foundDate: Date;
 
   @Column({
@@ -289,7 +289,7 @@ export class FoundItemClaim {
   @Column({ nullable: true })
   reviewedBy: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   reviewedAt: Date;
 
   @CreateDateColumn()
@@ -619,7 +619,7 @@ export class QrTag {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastScanned: Date;
 
   @Column({ type: 'float', nullable: true })

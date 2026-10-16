@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { GoogleOAuthProvider } from '@react-oauth/google';
+import { GoogleAuthProvider } from '../components/providers/google-provider';
 import CookieConsent from '../components/cookie-consent';
+import { Toaster } from 'sonner';
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -32,11 +33,12 @@ export default function RootLayout({
         <meta httpEquiv="X-Content-Type-Options" content="nosniff" />
       </head>
       <body className="min-h-screen bg-surface-50 text-surface-900 antialiased">
-        <GoogleOAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'your-google-client-id'}>
+        <GoogleAuthProvider clientId={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'your-google-client-id'}>
           {children}
           {/* Cookie consent banner — renders after hydration, outside all page layouts */}
           <CookieConsent />
-        </GoogleOAuthProvider>
+          <Toaster richColors position="top-right" theme="dark" />
+        </GoogleAuthProvider>
       </body>
     </html>
   );

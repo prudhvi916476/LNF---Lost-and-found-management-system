@@ -98,7 +98,7 @@ export default function MyLostItemsPage() {
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={getValidImageUrl(item.images[0].url)}
+                      src={getValidImageUrl(item.images[0].previewUrl || item.images[0].url)}
                       alt={item.itemName}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -115,6 +115,11 @@ export default function MyLostItemsPage() {
                 <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg text-xs font-semibold bg-danger-500 text-white shadow-sm">
                   LOST
                 </span>
+                {item.images?.[0]?.previewUrl && (
+                  <span className="absolute top-3 right-3 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/90 text-white backdrop-blur-md shadow-sm">
+                    NEGATIVE
+                  </span>
+                )}
                 {item.status === 'matched' && (
                   <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg text-xs font-semibold bg-primary-500 text-white shadow-sm">MATCHED</span>
                 )}
