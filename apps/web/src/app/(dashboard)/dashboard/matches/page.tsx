@@ -77,11 +77,12 @@ export default function MatchesPage() {
     e.stopPropagation();
     try {
       await matchApi.confirmMatch(id);
-      toast.success('Match confirmed! Redirecting to claim verification...');
+      toast.success('Redirecting to claim verification...');
       router.push(`/dashboard/found/${foundItemId}/claim`);
     } catch (e: any) {
       console.error(e);
-      toast.error('Failed to confirm match');
+      // Still navigate to claim verification even if previously confirmed
+      router.push(`/dashboard/found/${foundItemId}/claim`);
     }
   };
 
@@ -246,9 +247,16 @@ export default function MatchesPage() {
                     </div>
 
                     <div>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${getConfidenceColor(match.confidence)}`}>
-                        {(match.confidence || 'HIGH').toUpperCase()} MATCH
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${getConfidenceColor(match.confidence)}`}>
+                          {(match.confidence || 'HIGH').toUpperCase()} MATCH
+                        </span>
+                        {match.isConfirmed && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                            CLAIM INITIATED
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-white/50 mt-1">AI Confidence Score</p>
                     </div>
                   </div>
@@ -296,10 +304,14 @@ export default function MatchesPage() {
                   <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
                     <button
                       onClick={(e) => handleConfirm(match.id, match.foundItemId, e)}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                      className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        match.isConfirmed 
+                          ? 'bg-primary-500/20 text-primary-300 hover:bg-primary-500/30 border border-primary-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30'
+                      }`}
                     >
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      Claim Item
+                      {match.isConfirmed ? 'Continue Claim' : 'Claim Item'}
                     </button>
 
                     <button
@@ -384,7 +396,7 @@ export default function MatchesPage() {
                         className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        Proceed to Ownership Verification & Claim
+                        {match.isConfirmed ? 'Continue Ownership Verification & Claim' : 'Proceed to Ownership Verification & Claim'}
                       </button>
 
                       <Link href={`/dashboard/lost/${match.lostItemId}`} className="shrink-0">

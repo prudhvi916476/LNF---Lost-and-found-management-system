@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, In } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Match, LostItem, FoundItem, ItemImage } from '../../database/entities/all-entities';
+import { Match, LostItem, FoundItem, ItemImage, User } from '../../database/entities/all-entities';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -18,6 +18,8 @@ export class MatchingService {
     private readonly foundItemRepo: Repository<FoundItem>,
     @InjectRepository(ItemImage)
     private readonly imageRepo: Repository<ItemImage>,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
     private readonly configService: ConfigService,
   ) {}
 
@@ -26,7 +28,7 @@ export class MatchingService {
     if (!lostItem) return [];
 
     const foundItems = await this.foundItemRepo.find({
-      where: { status: 'awaiting_match' },
+      where: [{ status: 'awaiting_match' }, { status: 'matched' }],
     });
 
     const matches: Match[] = [];
@@ -58,7 +60,7 @@ export class MatchingService {
     if (!foundItem) return [];
 
     const lostItems = await this.lostItemRepo.find({
-      where: { status: 'active' },
+      where: [{ status: 'active' }, { status: 'matched' }],
     });
 
     const matches: Match[] = [];
@@ -86,11 +88,21 @@ export class MatchingService {
   }
 
   async runScanForUser(userId: string): Promise<{ matches: Match[]; total: number }> {
-    const userLost = await this.lostItemRepo.find({ where: { userId, status: 'active' } });
+    const userLost = await this.lostItemRepo.find({
+      where: [
+        { userId, status: 'active' },
+        { userId, status: 'matched' },
+      ],
+    });
     for (const item of userLost) {
       await this.findMatchesForLostItem(item.id);
     }
-    const userFound = await this.foundItemRepo.find({ where: { userId, status: 'awaiting_match' } });
+    const userFound = await this.foundItemRepo.find({
+      where: [
+        { userId, status: 'awaiting_match' },
+        { userId, status: 'matched' },
+      ],
+    });
     for (const item of userFound) {
       await this.findMatchesForFoundItem(item.id);
     }
@@ -100,7 +112,7 @@ export class MatchingService {
   async createDemoMatchForUser(userId: string): Promise<Match> {
     // 1. Get user's most recent lost item, or create one if user has none
     let lostItem = await this.lostItemRepo.findOne({
-      where: { userId, status: 'active' },
+      where: { userId },
       order: { createdAt: 'DESC' },
     });
 
@@ -118,10 +130,22 @@ export class MatchingService {
       lostItem = await this.lostItemRepo.save(lostItem);
     }
 
-    // 2. Create matching found item
+    // 2. Find a valid distinct user in DB to act as finder (satisfies PostgreSQL FK constraint)
+    let finder = await this.userRepo.findOne({
+      where: { id: Not(userId) },
+    });
+
+    if (!finder) {
+      // If only 1 user exists in the entire database, look for any user
+      finder = await this.userRepo.findOne({ where: {} });
+    }
+
+    const finderId = finder ? finder.id : userId;
+
+    // 3. Create matching found item
     const endpoint = this.configService.get('API_URL', 'http://localhost:3001');
     const demoFound = this.foundItemRepo.create({
-      userId: '00000000-0000-0000-0000-000000000000',
+      userId: finderId,
       itemName: `${lostItem.brand || 'Apple'} ${lostItem.itemName}`,
       category: lostItem.category || 'Phone',
       brand: lostItem.brand || 'Apple',
@@ -134,7 +158,7 @@ export class MatchingService {
     });
     const savedFound = await this.foundItemRepo.save(demoFound);
 
-    // 3. Attach negative preview image
+    // 4. Attach negative preview image
     const previewFilename = '2aae3927-7e22-4617-98bc-7d318f24bc77_Screenshot 2026-09-07 211326_preview.jpg';
     const previewUrl = `${endpoint}/api/uploads/previews/${previewFilename}`;
     const image = this.imageRepo.create({
@@ -146,16 +170,16 @@ export class MatchingService {
     });
     await this.imageRepo.save(image);
 
-    // 4. Save and return high-confidence match
+    // 5. Save and return high-confidence match
     const match = this.matchRepo.create({
       lostItemId: lostItem.id,
       foundItemId: savedFound.id,
-      matchScore: 92,
+      matchScore: 94,
       confidence: 'high',
       scoreBreakdown: {
         textScore: 95,
-        locationScore: 90,
-        timeScore: 92,
+        locationScore: 92,
+        timeScore: 90,
         imageScore: 88,
       },
     });
@@ -171,9 +195,8 @@ export class MatchingService {
       .leftJoinAndSelect('lostItem.images', 'lostImages')
       .leftJoinAndSelect('match.foundItem', 'foundItem')
       .leftJoinAndSelect('foundItem.images', 'foundImages')
-      .where('lostItem.userId = :userId OR foundItem.userId = :userId', { userId })
+      .where('(lostItem.userId = :userId OR foundItem.userId = :userId)', { userId })
       .andWhere('match.isDismissed = false')
-      .andWhere('match.isConfirmed = false')
       .orderBy('match.matchScore', 'DESC')
       .skip((p - 1) * l)
       .take(l)
