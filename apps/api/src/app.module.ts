@@ -21,6 +21,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { EmailModule } from './modules/email/email.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -117,6 +118,7 @@ import { EmailModule } from './modules/email/email.module';
     VerificationModule,
     EmailModule,
   ],
+  controllers: [AppController],
   providers: [
     {
       provide: APP_GUARD,
