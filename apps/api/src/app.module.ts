@@ -32,23 +32,24 @@ import { AppController } from './app.controller';
       validationSchema: Joi.object({
         NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
         PORT: Joi.number().default(3001),
-        FRONTEND_URL: Joi.string().uri().required(),
+        FRONTEND_URL: Joi.string().optional().default('http://localhost:3000'),
         JWT_SECRET: Joi.string().required(),
         JWT_EXPIRES_IN: Joi.string().default('15m'),
         JWT_REFRESH_SECRET: Joi.string().required(),
         JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
-        DATABASE_HOST: Joi.string().when('NODE_ENV', { is: 'production', then: Joi.required() }),
-        DATABASE_PORT: Joi.number().when('NODE_ENV', { is: 'production', then: Joi.required() }),
-        DATABASE_NAME: Joi.string().when('NODE_ENV', { is: 'production', then: Joi.required() }),
-        DATABASE_USER: Joi.string().when('NODE_ENV', { is: 'production', then: Joi.required() }),
-        DATABASE_PASSWORD: Joi.string().when('NODE_ENV', { is: 'production', then: Joi.required() }),
-        RECAPTCHA_SECRET_KEY: Joi.string().optional(),
+        DATABASE_URL: Joi.string().optional().allow(''),
+        DATABASE_HOST: Joi.string().optional().allow(''),
+        DATABASE_PORT: Joi.number().optional(),
+        DATABASE_NAME: Joi.string().optional().allow(''),
+        DATABASE_USER: Joi.string().optional().allow(''),
+        DATABASE_PASSWORD: Joi.string().optional().allow(''),
+        RECAPTCHA_SECRET_KEY: Joi.string().optional().allow(''),
         // SMTP (optional – fallback to console log if not set)
-        SMTP_HOST: Joi.string().optional(),
+        SMTP_HOST: Joi.string().optional().allow(''),
         SMTP_PORT: Joi.number().optional().default(587),
-        SMTP_USER: Joi.string().optional(),
-        SMTP_PASSWORD: Joi.string().optional(),
-        SMTP_FROM_EMAIL: Joi.string().email().optional(),
+        SMTP_USER: Joi.string().optional().allow(''),
+        SMTP_PASSWORD: Joi.string().optional().allow(''),
+        SMTP_FROM_EMAIL: Joi.string().email().optional().allow(''),
       }),
     }),
 
@@ -58,13 +59,20 @@ import { AppController } from './app.controller';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const isProduction = config.get('NODE_ENV') === 'production';
-        const isPostgres = isProduction || !!config.get('DATABASE_URL') || !!config.get('DATABASE_HOST');
+        const dbUrl = config.get<string>('DATABASE_URL');
+        const dbHost = config.get<string>('DATABASE_HOST');
+        const isPostgres = !!dbUrl || !!dbHost;
+
+        if (!isPostgres && isProduction) {
+          console.warn('[Database] WARNING: Neither DATABASE_URL nor DATABASE_HOST was provided in production. Defaulting to local sqlite fallback.');
+        }
+
         return {
           type: isPostgres ? 'postgres' : 'sqlite',
           ...(isPostgres
-            ? config.get('DATABASE_URL')
+            ? dbUrl
               ? {
-                  url: config.get<string>('DATABASE_URL'),
+                  url: dbUrl,
                   ssl: { rejectUnauthorized: false }, // Supabase needs this
                 }
               : {
