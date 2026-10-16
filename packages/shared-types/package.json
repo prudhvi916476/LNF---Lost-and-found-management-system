@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "echo 'lint passed'"
   },
-  "devDependencies": {
+  "dependencies": {
     "typescript": "^5.6.0"
   }
 }

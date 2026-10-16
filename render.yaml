@@ -5,7 +5,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build --workspace=@findit/shared-types && npm run build --workspace=@findit/api
+    buildCommand: npm install --include=dev && npm run build --workspace=@findit/shared-types && npm run build --workspace=@findit/api
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /api/health
     envVars:
@@ -36,7 +36,7 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build --workspace=@findit/shared-types && npm run build --workspace=@findit/web
+    buildCommand: npm install --include=dev && npm run build --workspace=@findit/shared-types && npm run build --workspace=@findit/web
     startCommand: npm run start --workspace=@findit/web
     healthCheckPath: /
     envVars:
