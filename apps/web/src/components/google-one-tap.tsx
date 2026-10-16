@@ -10,6 +10,10 @@ export function GoogleOneTap() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // One Tap is only meant for public landing/auth pages, never inside dashboard routes
+  const isDashboardRoute = pathname?.startsWith('/dashboard');
+  const shouldDisable = isAuthenticated || isLoading || isDashboardRoute;
+
   useGoogleOneTapLogin({
     onSuccess: async (credentialResponse) => {
       if (!credentialResponse.credential) return;
@@ -29,9 +33,10 @@ export function GoogleOneTap() {
       }
     },
     onError: () => {
-      // One Tap was either dismissed or not available in this browser context
+      // One Tap was either dismissed, aborted, or unavailable in this browser context
     },
-    disabled: isAuthenticated || isLoading,
+    disabled: shouldDisable,
+    use_fedcm_for_prompt: false,
     auto_select: false,
     cancel_on_tap_outside: true,
   });

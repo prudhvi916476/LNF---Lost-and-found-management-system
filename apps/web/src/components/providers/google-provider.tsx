@@ -10,6 +10,12 @@ interface GoogleAuthProviderProps {
 }
 
 export function GoogleAuthProvider({ children, clientId }: GoogleAuthProviderProps) {
+  const hasValidClientId = !!clientId && clientId !== 'your-google-client-id';
+
+  if (!hasValidClientId) {
+    return <>{children}</>;
+  }
+
   return (
     <GoogleOAuthProvider clientId={clientId}>
       {children}
